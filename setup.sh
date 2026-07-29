@@ -12,6 +12,19 @@ echo "== Cartella TV: $TV_DIR =="
 
 # --- 1. Dipendenze di sistema ---
 
+echo "== zsh (gli alias vanno in ~/.zshrc) =="
+if ! command -v zsh &>/dev/null; then
+    sudo apt update
+    sudo apt install -y zsh
+else
+    echo "gia' installato."
+fi
+touch "$ZSHRC"
+if [ "$(basename "${SHELL:-}")" != "zsh" ]; then
+    echo "Nota: la tua shell di login non e' zsh. Per usare gli alias appena aggiunti,"
+    echo "  esegui: chsh -s \$(command -v zsh)   (poi disconnettiti/riconnettiti)"
+fi
+
 echo "== portaudio19-dev (serve a sounddevice per leggere l'audio di sistema) =="
 if ! dpkg -s portaudio19-dev &>/dev/null; then
     sudo apt update
