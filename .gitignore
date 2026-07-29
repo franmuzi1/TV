@@ -3,3 +3,6 @@
 .chrome-la7-profile/
 __pycache__/
 *.pyc
+windows/build/
+windows/dist/
+windows/*.spec

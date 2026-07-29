@@ -100,3 +100,23 @@ Opzioni principali (`--help` per l'elenco completo): `--silence-seconds`,
 `--silence-threshold-db`, `--startup-grace-seconds`, `--audio-device`,
 `--headless`, `--no-maximize`, `--profile-dir`, `--librewolf-path`,
 `--chrome-path`.
+
+## 🪟 Versione Windows
+
+Cartella `windows/`: stessa idea (cookie/play automatici, reload sul
+silenzio, schermo intero ripristinato, volume di sistema controllato),
+ma solo **Google Chrome** (niente LibreWolf) e un **eseguibile con
+finestra grafica** al posto degli alias di shell — apri `TV.exe`,
+scegli sito e canale da una lista, premi "Guarda".
+
+Il file `.exe` viene compilato automaticamente da GitHub Actions
+(workflow `build-windows.yml`, gira su `windows-latest`): dopo ogni
+push che tocca `windows/`, lo trovi come artifact nella scheda
+**Actions** del repo. Richiede Google Chrome gia' installato sul PC
+Windows di destinazione.
+
+> ⚠️ Non testato su una vera macchina Windows (sviluppato da un
+> ambiente Linux, verificato solo per sintassi e impacchettamento via
+> CI): in particolare la cattura audio WASAPI loopback e il controllo
+> mute via `pycaw` potrebbero aver bisogno di aggiustamenti. Se qualcosa
+> non va, segnalalo.
