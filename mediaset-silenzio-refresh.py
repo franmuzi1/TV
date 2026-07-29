@@ -26,7 +26,9 @@ la lettura.
 
 import argparse
 import os
+import re
 import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -53,6 +55,7 @@ from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.firefox.service import Service as FirefoxService
@@ -343,19 +346,58 @@ def wait_for_video_element(driver, timeout: float) -> bool:
     return False
 
 
-def is_fullscreen(driver) -> bool:
-    """Rileva sia lo schermo intero nativo del browser (F11/gestito dal
-    window manager, non esposto come API di pagina: si approssima
-    confrontando le dimensioni esterne della finestra con lo schermo) sia
-    quello innescato dal player via Fullscreen API (document.fullscreenElement,
-    es. il pulsante di espansione di video.js)."""
+def get_screen_resolution() -> tuple[int, int] | None:
+    """Risoluzione fisica reale dello schermo primario, letta da xrandr.
+    Serve come riferimento affidabile per is_fullscreen(): su LibreWolf/
+    Firefox in ambiente Wayland, window.screen.width/height di JS non
+    restano fissi alla risoluzione del monitor ma seguono le dimensioni
+    della finestra stessa (verificato: cambiano insieme a un semplice
+    maximize_window()), quindi non si possono usare come confronto."""
     try:
-        return bool(driver.execute_script(
-            "return !!document.fullscreenElement || "
-            "(window.outerWidth === screen.width && window.outerHeight === screen.height);"
-        ))
+        out = subprocess.run(
+            ["xrandr", "--query"], capture_output=True, text=True, timeout=3
+        ).stdout
+        m = re.search(r"current (\d+) x (\d+)", out)
+        if m:
+            return int(m.group(1)), int(m.group(2))
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return None
+
+
+def is_fullscreen(driver, screen_resolution: tuple[int, int] | None) -> bool:
+    """Rileva sia lo schermo intero nativo del browser (F11/window
+    manager: la finestra occupa esattamente la risoluzione fisica dello
+    schermo, senza il margine che rimane invece con una finestra solo
+    massimizzata) sia quello innescato dal player via Fullscreen API
+    (document.fullscreenElement, es. il pulsante di espansione di
+    video.js)."""
+    try:
+        if driver.execute_script("return !!document.fullscreenElement;"):
+            return True
+        if screen_resolution is None:
+            return False
+        dims = driver.execute_script("return [window.outerWidth, window.outerHeight];")
+        return tuple(dims) == screen_resolution
     except WebDriverException:
         return False
+
+
+def move_cursor_away(driver) -> None:
+    """Sposta il cursore nell'angolo in alto a sinistra della pagina:
+    quando si entra in schermo intero (manualmente o dopo un ripristino
+    automatico) evita che resti fermo in mezzo al video. Gli offset di
+    move_to_element_with_offset sono relativi al CENTRO dell'elemento
+    (W3C actions), non al suo angolo: si calcola quindi lo spostamento
+    dal centro del viewport fino a (1, 1)."""
+    try:
+        width, height = driver.execute_script("return [window.innerWidth, window.innerHeight];")
+        body = driver.find_element(By.TAG_NAME, "body")
+        ActionChains(driver).move_to_element_with_offset(
+            body, int(1 - width / 2), int(1 - height / 2)
+        ).perform()
+    except WebDriverException:
+        pass
 
 
 def ensure_unmuted(driver) -> None:
@@ -493,6 +535,9 @@ def main() -> None:
 
         silence_started = None
         block_size = max(1, int(samplerate * args.check_interval))
+        screen_resolution = get_screen_resolution()
+        fullscreen_state = is_fullscreen(driver, screen_resolution)
+        next_fullscreen_check = time.monotonic() + 1.0
 
         with sd.InputStream(device=device, channels=1, samplerate=samplerate, blocksize=block_size) as stream:
             while True:
@@ -509,7 +554,7 @@ def main() -> None:
                     elapsed = now - silence_started
                     if elapsed >= args.silence_seconds:
                         print(f"[{time.strftime('%H:%M:%S')}] Silenzio da {elapsed:.0f}s ({level_db:.1f} dBFS) -> reload pagina")
-                        was_fullscreen = is_fullscreen(driver)
+                        was_fullscreen = is_fullscreen(driver, screen_resolution)
                         try:
                             driver.get(url)
                             accept_cookies = site_cfg.get("accept_cookies")
@@ -523,13 +568,28 @@ def main() -> None:
                                 ensure_unmuted(driver)
                             if was_fullscreen:
                                 driver.fullscreen_window()
+                                move_cursor_away(driver)
                                 print("Schermo intero ripristinato.")
+                                fullscreen_state = True
+                                next_fullscreen_check = time.monotonic() + 1.0
                         except WebDriverException as exc:
                             print(f"Errore durante il reload: {exc}")
                         silence_started = None
                         stream_ready_at = time.monotonic() + args.startup_grace_seconds
                 else:
                     silence_started = None
+
+                # Rileva anche lo schermo intero attivato manualmente
+                # dall'utente mentre guarda (non solo quello ripristinato
+                # sopra dopo un reload): controllo throttled a ~1/s per
+                # non intasare il loop di campionamento audio con round-trip
+                # JS ad ogni singolo campione.
+                if now >= next_fullscreen_check:
+                    next_fullscreen_check = now + 1.0
+                    currently_fullscreen = is_fullscreen(driver, screen_resolution)
+                    if currently_fullscreen and not fullscreen_state:
+                        move_cursor_away(driver)
+                    fullscreen_state = currently_fullscreen
     except KeyboardInterrupt:
         print("\nInterrotto dall'utente.")
     finally:
