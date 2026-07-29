@@ -1,0 +1,5 @@
+.venv-mediaset/
+.librewolf-*-profile/
+.chrome-la7-profile/
+__pycache__/
+*.pyc
