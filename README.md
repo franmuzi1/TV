@@ -45,14 +45,29 @@ per policy di privacy).
 - Python 3 con `selenium`, `sounddevice`, `numpy` (usare un venv,
   es. `.venv/` — ignorato da git)
 
-Installazione delle dipendenze di sistema (portaudio, LibreWolf,
-geckodriver):
+## Installazione
 
 ```sh
-./install-deps.sh
+./setup.sh
 ```
 
+Installa (solo se mancante) portaudio, LibreWolf, geckodriver, Google
+Chrome, crea il venv Python con le dipendenze e aggiunge gli alias di
+shell (`canale5`, `rai1`, `la7`, `tv8`, `nove`, ecc.) a `~/.zshrc`. E'
+idempotente: si puo' rilanciare quante volte si vuole, salta cio' che
+c'e' gia'. Dopo il primo lancio, `source ~/.zshrc` (o un nuovo terminale)
+e i canali sono pronti.
+
 ## Uso
+
+Con gli alias installati da `setup.sh`, basta digitare il nome del
+canale:
+
+```sh
+rai1
+```
+
+Oppure direttamente lo script:
 
 ```sh
 python silenzio-refresh.py --site <sito> <canale>
@@ -67,18 +82,11 @@ python silenzio-refresh.py --site rai rai1
 Senza `--site` usa `mediaset` come default. Senza indicare il canale,
 usa il primo canale del sito. `Ctrl+C` interrompe e chiude il browser.
 
+Se il tuo provider richiede una VPN per qualche sito, accendila/spegnila
+a mano (es. `sudo wg-quick up wg0`) prima di lanciare il canale: lo
+script non la gestisce.
+
 Opzioni principali (`--help` per l'elenco completo): `--silence-seconds`,
 `--silence-threshold-db`, `--startup-grace-seconds`, `--audio-device`,
 `--headless`, `--no-maximize`, `--profile-dir`, `--librewolf-path`,
 `--chrome-path`.
-
-### Alias di shell
-
-Nel proprio `.zshrc`/`.bashrc` conviene definire una funzione per canale
-che richiama lo script (gestendo anche l'accensione/spegnimento di
-un'eventuale VPN, se il proprio provider la richiede per alcuni siti).
-Esempio minimo:
-
-```sh
-function rai1() { python /percorso/a/silenzio-refresh.py --site rai rai1 "$@" }
-```
