@@ -336,6 +336,30 @@ def rms_dbfs(samples: np.ndarray) -> float:
     return 20 * np.log10(rms)
 
 
+def is_system_output_muted() -> bool:
+    """Il sink audio di default (altoparlanti/cuffie) e' mutato o a
+    volume zero. In questo caso il silenzio rilevato non e' colpa dello
+    stream: il loop deve accorgersene, avvisare ed evitare di ricaricare
+    la pagina in continuazione finche' l'utente non riattiva il volume."""
+    try:
+        mute_out = subprocess.run(
+            ["pactl", "get-sink-mute", "@DEFAULT_SINK@"],
+            capture_output=True, text=True, timeout=3,
+        ).stdout
+        if "yes" in mute_out.lower():
+            return True
+        vol_out = subprocess.run(
+            ["pactl", "get-sink-volume", "@DEFAULT_SINK@"],
+            capture_output=True, text=True, timeout=3,
+        ).stdout
+        m = re.search(r"(\d+)%", vol_out)
+        if m and int(m.group(1)) == 0:
+            return True
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return False
+
+
 def wait_for_video_element(driver, timeout: float) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -539,6 +563,10 @@ def main() -> None:
         screen_resolution = get_screen_resolution()
         fullscreen_state = is_fullscreen(driver, screen_resolution)
         next_fullscreen_check = time.monotonic() + 1.0
+        system_muted = is_system_output_muted()
+        next_mute_check = time.monotonic() + 1.0
+        if system_muted:
+            print("Attenzione: volume di sistema disattivato/a zero. Il controllo silenzio resta in pausa finche' non lo riattivi.")
 
         with sd.InputStream(device=device, channels=1, samplerate=samplerate, blocksize=block_size) as stream:
             while True:
@@ -549,7 +577,18 @@ def main() -> None:
                 if now < stream_ready_at:
                     continue
 
-                if level_db < args.silence_threshold_db:
+                if now >= next_mute_check:
+                    next_mute_check = now + 1.0
+                    newly_muted = is_system_output_muted()
+                    if newly_muted and not system_muted:
+                        print(f"[{time.strftime('%H:%M:%S')}] Volume di sistema disattivato: metto in pausa il controllo silenzio finche' non lo riattivi.")
+                    elif system_muted and not newly_muted:
+                        print(f"[{time.strftime('%H:%M:%S')}] Volume di sistema riattivato, riprendo il controllo silenzio.")
+                    system_muted = newly_muted
+
+                if system_muted:
+                    silence_started = None
+                elif level_db < args.silence_threshold_db:
                     if silence_started is None:
                         silence_started = now
                     elapsed = now - silence_started
