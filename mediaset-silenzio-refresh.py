@@ -147,9 +147,9 @@ def accept_cookies_nove(driver, timeout: float = 8.0) -> None:
 
 def click_play_nove(driver, timeout: float = 15.0) -> None:
     """Il player di Nove (Video.js) mostra un grande pulsante 'Play' che
-    va cliccato per far partire lo stream. Il player parte pero' muto
-    (autoplay silenzioso concesso dal browser): va smutato via JS subito
-    dopo, altrimenti il video scorre ma non produce mai audio."""
+    va cliccato per far partire lo stream (parte muto, per rispettare le
+    policy di autoplay del browser: l'audio viene sbloccato da
+    ensure_unmuted, chiamata subito dopo su tutti i siti)."""
     try:
         btn = WebDriverWait(driver, timeout).until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, ".vjs-big-play-button"))
@@ -158,11 +158,6 @@ def click_play_nove(driver, timeout: float = 15.0) -> None:
         print("Player: cliccato 'Play'.")
     except TimeoutException:
         return
-    time.sleep(1.5)
-    try:
-        driver.execute_script("var v = document.querySelector('video'); if (v) v.muted = false;")
-    except WebDriverException:
-        pass
 
 
 def accept_cookies_la7(driver, timeout: float = 8.0) -> None:
@@ -363,6 +358,21 @@ def is_fullscreen(driver) -> bool:
         return False
 
 
+def ensure_unmuted(driver) -> None:
+    """Alcuni player partono muti per rispettare le policy di autoplay del
+    browser (capita in modo incostante, specie su LibreWolf dove
+    l'autoplay silenzioso e' permesso anche quando quello con audio non
+    lo e'): sblocca sempre l'audio su tutti i tag <video> della pagina,
+    su qualunque sito."""
+    try:
+        driver.execute_script(
+            "document.querySelectorAll('video').forEach(function (v) { "
+            "v.muted = false; v.volume = 1.0; });"
+        )
+    except WebDriverException:
+        pass
+
+
 def load_page(driver, url: str, site_cfg: dict) -> None:
     driver.get(url)
     accept_cookies = site_cfg.get("accept_cookies")
@@ -371,7 +381,10 @@ def load_page(driver, url: str, site_cfg: dict) -> None:
     click_play = site_cfg.get("click_play")
     if click_play:
         click_play(driver)
-    if not wait_for_video_element(driver, timeout=30):
+    if wait_for_video_element(driver, timeout=30):
+        time.sleep(1.5)
+        ensure_unmuted(driver)
+    else:
         print("Attenzione: nessun tag <video> individuato entro 30s (potrebbe essere in un iframe o dietro un consenso cookie). Proseguo comunque.")
 
 
@@ -505,7 +518,9 @@ def main() -> None:
                             click_play = site_cfg.get("click_play")
                             if click_play:
                                 click_play(driver)
-                            wait_for_video_element(driver, timeout=30)
+                            if wait_for_video_element(driver, timeout=30):
+                                time.sleep(1.5)
+                                ensure_unmuted(driver)
                             if was_fullscreen:
                                 driver.fullscreen_window()
                                 print("Schermo intero ripristinato.")
