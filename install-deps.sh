@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Installa le dipendenze di sistema per mediaset-silenzio-refresh.py:
+# Installa le dipendenze di sistema per silenzio-refresh.py:
 # portaudio (per sounddevice), LibreWolf (via extrepo) e geckodriver (da Mozilla).
+# Google Chrome (necessario solo per il canale la7, DRM/Widevine) va
+# installato a parte.
 set -euo pipefail
 
 echo "== apt update =="

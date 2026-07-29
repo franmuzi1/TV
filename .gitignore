@@ -1,4 +1,4 @@
-.venv-mediaset/
+.venv/
 .librewolf-*-profile/
 .chrome-la7-profile/
 __pycache__/

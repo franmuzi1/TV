@@ -6,7 +6,7 @@ interrompe.
 
 ## Come funziona
 
-`mediaset-silenzio-refresh.py` apre un browser via Selenium sulla diretta
+`silenzio-refresh.py` apre un browser via Selenium sulla diretta
 del canale scelto, gestisce da solo il banner cookie e (dove serve) il
 click sul pulsante Play, poi monitora **l'audio di sistema** (loopback
 PulseAudio/PipeWire, non l'audio della pagina) per rilevare quando lo
@@ -43,25 +43,25 @@ per policy di privacy).
   binario utilizzabile da geckodriver) + geckodriver
 - Google Chrome (solo per il sito `la7`)
 - Python 3 con `selenium`, `sounddevice`, `numpy` (usare un venv,
-  es. `.venv-mediaset/` — ignorato da git)
+  es. `.venv/` — ignorato da git)
 
 Installazione delle dipendenze di sistema (portaudio, LibreWolf,
 geckodriver):
 
 ```sh
-./install-mediaset-deps.sh
+./install-deps.sh
 ```
 
 ## Uso
 
 ```sh
-python mediaset-silenzio-refresh.py --site <sito> <canale>
+python silenzio-refresh.py --site <sito> <canale>
 ```
 
 Esempio:
 
 ```sh
-python mediaset-silenzio-refresh.py --site rai rai1
+python silenzio-refresh.py --site rai rai1
 ```
 
 Senza `--site` usa `mediaset` come default. Senza indicare il canale,
@@ -80,5 +80,5 @@ un'eventuale VPN, se il proprio provider la richiede per alcuni siti).
 Esempio minimo:
 
 ```sh
-function rai1() { python /percorso/a/mediaset-silenzio-refresh.py --site rai rai1 "$@" }
+function rai1() { python /percorso/a/silenzio-refresh.py --site rai rai1 "$@" }
 ```
