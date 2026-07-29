@@ -260,9 +260,10 @@ SITES = {
         "click_play": None,
     },
     # ATTENZIONE: a differenza degli altri siti, Nove NON funziona con la
-    # VPN (wg0) attiva - va tenuta spenta (gestito nell'alias di shell).
-    # Il dominio nove.it e' un parcheggio pubblicitario scaduto, non il
-    # sito vero: quello reale e' nove.tv.
+    # VPN (wg0) attiva - va tenuta spenta (manualmente: lo script non
+    # gestisce piu' la VPN in automatico). Il dominio nove.it e' un
+    # parcheggio pubblicitario scaduto, non il sito vero: quello reale e'
+    # nove.tv.
     "nove": {
         "base_url": "https://nove.tv/{slug}",
         "channels": {"nove": "live-streaming-nove"},
