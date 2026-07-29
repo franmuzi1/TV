@@ -38,12 +38,21 @@ per policy di privacy).
 
 ## Requisiti
 
-- Debian/derivate, PulseAudio o PipeWire con compatibilita' Pulse
-- LibreWolf (pacchetto nativo, non flatpak: il flatpak non espone un
-  binario utilizzabile da geckodriver) + geckodriver
-- Google Chrome (solo per il sito `la7`)
-- Python 3 con `selenium`, `sounddevice`, `numpy` (usare un venv,
-  es. `.venv/` — ignorato da git)
+Non installabili da `setup.sh` (vanno gia' presenti sulla macchina):
+
+- Debian/derivate con un **ambiente desktop gia' installato e attivo**
+  (X11 o Wayland): lo script apre finestre di browser vere, non ha senso
+  su un server headless
+- un **server audio funzionante** (PipeWire con compatibilita' Pulse, o
+  PulseAudio) — di norma c'e' gia' su qualunque desktop Debian, ma su
+  un'installazione "minimal" potrebbe mancare; `setup.sh` non lo installa
+  in automatico per non rischiare di scavalcare quello gia' in uso
+- `git`, per clonare questo repo
+
+Installati da `setup.sh` se mancanti: `curl`, `ca-certificates`,
+`python3-venv`, `zsh`, LibreWolf + geckodriver, Google Chrome (solo per
+`la7`), portaudio, e le dipendenze Python (`selenium`, `sounddevice`,
+`numpy`) in un venv dedicato (`.venv/` — ignorato da git).
 
 ## Installazione
 

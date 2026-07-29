@@ -12,12 +12,18 @@ echo "== Cartella TV: $TV_DIR =="
 
 # --- 1. Dipendenze di sistema ---
 
-echo "== zsh (gli alias vanno in ~/.zshrc) =="
-if ! command -v zsh &>/dev/null; then
+echo "== Pacchetti di base (curl, ca-certificates, python3-venv, zsh) =="
+BASE_PKGS=()
+command -v curl &>/dev/null || BASE_PKGS+=(curl)
+dpkg -s ca-certificates &>/dev/null || BASE_PKGS+=(ca-certificates)
+dpkg -s python3-venv &>/dev/null || BASE_PKGS+=(python3-venv)
+command -v zsh &>/dev/null || BASE_PKGS+=(zsh)
+if [ ${#BASE_PKGS[@]} -gt 0 ]; then
+    echo "Mancano: ${BASE_PKGS[*]}"
     sudo apt update
-    sudo apt install -y zsh
+    sudo apt install -y "${BASE_PKGS[@]}"
 else
-    echo "gia' installato."
+    echo "gia' tutti installati."
 fi
 touch "$ZSHRC"
 if [ "$(basename "${SHELL:-}")" != "zsh" ]; then
