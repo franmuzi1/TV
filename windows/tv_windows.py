@@ -149,7 +149,10 @@ def accept_cookies_nove(driver, timeout: float = 8.0) -> None:
         )
     except TimeoutException:
         return
-    prefs_btn.click()
+    # Click nativo fallisce con ElementNotInteractableException ("could not
+    # be scrolled into view"): il banner OneTrust e' in position: fixed.
+    # Click via JS bypassa lo scroll.
+    driver.execute_script("arguments[0].click();", prefs_btn)
     try:
         only_essential_btn = WebDriverWait(driver, timeout).until(
             EC.element_to_be_clickable((By.XPATH, "//button[contains(text(),'Solo cookie essenziali')]"))
