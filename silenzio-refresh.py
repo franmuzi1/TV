@@ -444,6 +444,36 @@ def ensure_unmuted(driver) -> None:
         pass
 
 
+VOLUME_BOOST_PERCENT = 150
+
+
+def boost_audio_volume(app_name: str, percent: int = VOLUME_BOOST_PERCENT) -> None:
+    """v.volume dell'HTMLMediaElement si ferma a 1.0: alcuni stream (es.
+    TV8) restano deboli anche a mixer di sistema al 100%. Si alza il
+    volume per-app oltre il 100% via pactl (PipeWire lo permette fino al
+    clipping). Va rifatto ad ogni load/reload: verificato che il boost
+    non sopravvive quando lo stream audio viene ricreato (il
+    'module-stream-restore' di PipeWire-pulse non e' persistente su
+    questo setup WirePlumber)."""
+    try:
+        out = subprocess.run(
+            ["pactl", "list", "sink-inputs"],
+            capture_output=True, text=True, timeout=3,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return
+    for block in out.split("Sink Input #")[1:]:
+        id_match = re.match(r"(\d+)", block)
+        if id_match and f'application.name = "{app_name}"' in block:
+            try:
+                subprocess.run(
+                    ["pactl", "set-sink-input-volume", id_match.group(1), f"{percent}%"],
+                    capture_output=True, timeout=3,
+                )
+            except (OSError, subprocess.SubprocessError):
+                pass
+
+
 def load_page(driver, url: str, site_cfg: dict) -> None:
     driver.get(url)
     accept_cookies = site_cfg.get("accept_cookies")
@@ -455,6 +485,7 @@ def load_page(driver, url: str, site_cfg: dict) -> None:
     if wait_for_video_element(driver, timeout=30):
         time.sleep(1.5)
         ensure_unmuted(driver)
+        boost_audio_volume("Google Chrome" if site_cfg.get("browser") == "chrome" else "LibreWolf")
     else:
         print("Attenzione: nessun tag <video> individuato entro 30s (potrebbe essere in un iframe o dietro un consenso cookie). Proseguo comunque.")
 
@@ -610,6 +641,7 @@ def main() -> None:
                             if wait_for_video_element(driver, timeout=30):
                                 time.sleep(1.5)
                                 ensure_unmuted(driver)
+                                boost_audio_volume("Google Chrome" if site_cfg.get("browser") == "chrome" else "LibreWolf")
                             if was_fullscreen:
                                 driver.fullscreen_window()
                                 move_cursor_away(driver)
