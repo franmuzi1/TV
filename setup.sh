@@ -142,9 +142,21 @@ _nove_diretta() {
     "$VENV_DIR/bin/python" "$TV_DIR/silenzio-refresh.py" --site nove "\$@"
 }
 function nove() { _nove_diretta nove "\$@" }
+
+# Canali Warner Bros. Discovery (le "sorelle" di Nove: stessa azienda,
+# stessa piattaforma web). Come Nove, vanno guardati con la VPN spenta
+# (vpnoff), altrimenti il video resta bloccato in caricamento.
+_discovery_diretta() {
+    "$VENV_DIR/bin/python" "$TV_DIR/silenzio-refresh.py" --site discovery "\$@"
+}
+function dmax()        { _discovery_diretta dmax "\$@" }
+function realtime()    { _discovery_diretta realtime "\$@" }
+function giallo()      { _discovery_diretta giallo "\$@" }
+function motortrend()  { _discovery_diretta motortrend "\$@" }
+function foodnetwork() { _discovery_diretta foodnetwork "\$@" }
 # <<< Dirette TV <<<
 EOF
     echo "Alias aggiunti. Esegui 'source ~/.zshrc' (o apri un nuovo terminale) per usarli subito."
 fi
 
-echo "== Fatto: canale5, rai1, la7, tv8, nove ecc. sono pronti =="
+echo "== Fatto: canale5, rai1, la7, tv8, nove, dmax ecc. sono pronti =="

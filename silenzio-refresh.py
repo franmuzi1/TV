@@ -167,32 +167,60 @@ def click_play_nove(driver, timeout: float = 15.0) -> None:
         return
 
 
+FULLSCREEN_CONTROL_SELECTORS = (
+    ".vjs-fullscreen-control",   # Video.js (Nove, Discovery, Mediaset)
+    ".jw-icon-fullscreen",       # JW Player (TV8)
+)
+
+
 def enter_player_fullscreen(driver, timeout: float = 10.0) -> bool:
-    """Rimette a schermo intero il PLAYER Video.js (Fullscreen API sul video)
-    cliccando il pulsante 'schermo intero' della barra dei controlli. Serve
-    dopo un reload: driver.fullscreen_window() mette a schermo intero solo la
-    FINESTRA del browser, ma il video resta alle sue dimensioni normali dentro
-    la pagina, quindi per l'utente 'lo schermo intero non torna'. Non si puo'
-    rifare requestFullscreen via execute_script (il browser lo rifiuta senza
-    una gesture utente), mentre un click Selenium conta come gesture reale
-    (stesso motivo per cui funziona il click su Play). Prima passa il mouse sul
-    player per far ricomparire la barra dei controlli, che Video.js nasconde
-    durante la riproduzione. Torna True se il click e' andato a segno."""
+    """Rimette a schermo intero il PLAYER (Fullscreen API sul video) dopo un
+    reload. driver.fullscreen_window() mette a schermo intero solo la FINESTRA
+    del browser, lasciando il video alle sue dimensioni dentro la pagina:
+    per l'utente 'lo schermo intero non torna'. requestFullscreen non si puo'
+    rifare via execute_script (il browser lo rifiuta senza una gesture utente
+    reale), mentre gli input Selenium contano come gesture. Si prova quindi:
+    (1) a cliccare il pulsante 'schermo intero' del player (Video.js o JW),
+    (2) se non c'e', a fare doppio click sul video (la gran parte dei player,
+    di default, va a tutto schermo col doppio click). Alla fine VERIFICA che il
+    fullscreen sia davvero attivo, cosi' il chiamante puo' ripiegare sul
+    fullscreen di finestra se non ha funzionato. Torna True solo se il player e'
+    effettivamente a schermo intero. Player-agnostico: non serve sapere in
+    anticipo quale player usa il sito."""
     try:
-        player = WebDriverWait(driver, timeout).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, ".video-js"))
+        video = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.TAG_NAME, "video"))
         )
     except TimeoutException:
         return False
+    # Passa il mouse sul video per far ricomparire la barra dei controlli, che
+    # i player nascondono durante la riproduzione.
     try:
-        ActionChains(driver).move_to_element(player).perform()
+        ActionChains(driver).move_to_element(video).perform()
     except WebDriverException:
         pass
+    clicked = False
+    for selector in FULLSCREEN_CONTROL_SELECTORS:
+        try:
+            btn = WebDriverWait(driver, 3).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+            )
+            btn.click()
+            clicked = True
+            break
+        except (TimeoutException, WebDriverException):
+            continue
+    if not clicked:
+        # Nessun pulsante raggiungibile: doppio click sul video (gesture
+        # equivalente, supportata di default dalla gran parte dei player).
+        try:
+            ActionChains(driver).double_click(video).perform()
+        except WebDriverException:
+            return False
     try:
-        btn = WebDriverWait(driver, timeout).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, ".vjs-fullscreen-control"))
+        WebDriverWait(driver, 3).until(
+            lambda d: d.execute_script("return !!document.fullscreenElement;")
         )
-        btn.click()
         return True
     except (TimeoutException, WebDriverException):
         return False
@@ -305,9 +333,6 @@ SITES = {
         "profile_dirname": ".librewolf-nove-profile",
         "accept_cookies": accept_cookies_nove,
         "click_play": click_play_nove,
-        # Player Video.js: dopo un reload lo schermo intero va rimesso
-        # cliccando il pulsante fullscreen del player (vedi enter_player_fullscreen).
-        "videojs": True,
     },
     # Canali "sorelle" di Nove nel gruppo Warner Bros. Discovery (stessa
     # azienda del canale 9): girano sulla stessa piattaforma web di nove.tv,
@@ -332,7 +357,6 @@ SITES = {
         "profile_dirname": ".librewolf-discovery-profile",
         "accept_cookies": accept_cookies_nove,
         "click_play": click_play_nove,
-        "videojs": True,
     },
 }
 
@@ -506,31 +530,49 @@ def ensure_unmuted(driver) -> None:
 VOLUME_BOOST_PERCENT = 150
 
 
-def boost_audio_volume(app_name: str, percent: int = VOLUME_BOOST_PERCENT) -> None:
+def boost_audio_volume(
+    app_name: str,
+    percent: int = VOLUME_BOOST_PERCENT,
+    retries: int = 12,
+    interval: float = 0.5,
+) -> None:
     """v.volume dell'HTMLMediaElement si ferma a 1.0: alcuni stream (es.
     TV8) restano deboli anche a mixer di sistema al 100%. Si alza il
     volume per-app oltre il 100% via pactl (PipeWire lo permette fino al
     clipping). Va rifatto ad ogni load/reload: verificato che il boost
     non sopravvive quando lo stream audio viene ricreato (il
     'module-stream-restore' di PipeWire-pulse non e' persistente su
-    questo setup WirePlumber)."""
-    try:
-        out = subprocess.run(
-            ["pactl", "list", "sink-inputs"],
-            capture_output=True, text=True, timeout=3,
-        ).stdout
-    except (OSError, subprocess.SubprocessError):
-        return
-    for block in out.split("Sink Input #")[1:]:
-        id_match = re.match(r"(\d+)", block)
-        if id_match and f'application.name = "{app_name}"' in block:
-            try:
-                subprocess.run(
-                    ["pactl", "set-sink-input-volume", id_match.group(1), f"{percent}%"],
-                    capture_output=True, timeout=3,
-                )
-            except (OSError, subprocess.SubprocessError):
-                pass
+    questo setup WirePlumber).
+
+    Al primo lancio, pero', il sink-input dell'audio puo' non essere
+    ancora registrato quando proviamo (browser e pipeline audio ancora in
+    warm-up): con un solo tentativo il boost non 'prendeva' e il volume si
+    alzava solo dopo il primo reload. Per questo si riprova a intervalli,
+    finche' non compare almeno un flusso dell'app, cosi' il volume e' gia'
+    alzato dal primo avvio. Appena un flusso viene alzato, esce."""
+    for _ in range(max(1, retries)):
+        try:
+            out = subprocess.run(
+                ["pactl", "list", "sink-inputs"],
+                capture_output=True, text=True, timeout=3,
+            ).stdout
+        except (OSError, subprocess.SubprocessError):
+            return
+        boosted = False
+        for block in out.split("Sink Input #")[1:]:
+            id_match = re.match(r"(\d+)", block)
+            if id_match and f'application.name = "{app_name}"' in block:
+                try:
+                    subprocess.run(
+                        ["pactl", "set-sink-input-volume", id_match.group(1), f"{percent}%"],
+                        capture_output=True, timeout=3,
+                    )
+                    boosted = True
+                except (OSError, subprocess.SubprocessError):
+                    pass
+        if boosted:
+            return
+        time.sleep(interval)
 
 
 def load_page(driver, url: str, site_cfg: dict) -> None:
@@ -715,7 +757,7 @@ def main() -> None:
                                 ensure_unmuted(driver)
                                 boost_audio_volume("Google Chrome" if site_cfg.get("browser") == "chrome" else "LibreWolf")
                             if was_fullscreen:
-                                if was_player_fullscreen and site_cfg.get("videojs") and enter_player_fullscreen(driver):
+                                if was_player_fullscreen and enter_player_fullscreen(driver):
                                     print("Schermo intero del player ripristinato.")
                                 else:
                                     driver.fullscreen_window()

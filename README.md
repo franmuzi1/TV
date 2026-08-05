@@ -44,9 +44,9 @@ Widevine e LibreWolf non include il CDM necessario a decriptarlo
 | **RaiPlay** | rai1 · rai2 · rai3 · rai4 · rai5 · raigulp · raimovie · rainews24 · raipremium · rairadio2 · raiscuola · raisport · raistoria · raiyoyo |
 | **La7** | la7 |
 | **TV8** | tv8 |
-| **Nove** | nove |
+| **Warner Bros. Discovery** | nove · dmax · realtime · giallo · motortrend · foodnetwork |
 
-29 canali, tutti richiamabili per nome dopo `./setup.sh`.
+34 canali, tutti richiamabili per nome dopo `./setup.sh`.
 
 ## ⚙️ Installazione
 
@@ -94,7 +94,10 @@ Senza `--site` usa `mediaset`; senza canale, il primo del sito.
 
 > **VPN**: se il tuo provider ne richiede una per qualche sito, va
 > accesa/spenta a mano (es. `sudo wg-quick up wg0`) prima di lanciare il
-> canale — lo script non la gestisce.
+> canale — lo script non la gestisce. I canali **Warner Bros. Discovery**
+> (`nove`, `dmax`, `realtime`, `giallo`, `motortrend`, `foodnetwork`) al
+> contrario vanno guardati con la VPN **spenta** (`vpnoff`): con la VPN
+> attiva lo stream resta bloccato in caricamento (blocco geografico).
 
 Opzioni principali (`--help` per l'elenco completo): `--silence-seconds`,
 `--silence-threshold-db`, `--startup-grace-seconds`, `--audio-device`,
