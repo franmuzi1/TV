@@ -167,6 +167,37 @@ def click_play_nove(driver, timeout: float = 15.0) -> None:
         return
 
 
+def enter_player_fullscreen(driver, timeout: float = 10.0) -> bool:
+    """Rimette a schermo intero il PLAYER Video.js (Fullscreen API sul video)
+    cliccando il pulsante 'schermo intero' della barra dei controlli. Serve
+    dopo un reload: driver.fullscreen_window() mette a schermo intero solo la
+    FINESTRA del browser, ma il video resta alle sue dimensioni normali dentro
+    la pagina, quindi per l'utente 'lo schermo intero non torna'. Non si puo'
+    rifare requestFullscreen via execute_script (il browser lo rifiuta senza
+    una gesture utente), mentre un click Selenium conta come gesture reale
+    (stesso motivo per cui funziona il click su Play). Prima passa il mouse sul
+    player per far ricomparire la barra dei controlli, che Video.js nasconde
+    durante la riproduzione. Torna True se il click e' andato a segno."""
+    try:
+        player = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, ".video-js"))
+        )
+    except TimeoutException:
+        return False
+    try:
+        ActionChains(driver).move_to_element(player).perform()
+    except WebDriverException:
+        pass
+    try:
+        btn = WebDriverWait(driver, timeout).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, ".vjs-fullscreen-control"))
+        )
+        btn.click()
+        return True
+    except (TimeoutException, WebDriverException):
+        return False
+
+
 def accept_cookies_la7(driver, timeout: float = 8.0) -> None:
     """Banner cookie IAB TCF2 di La7 (CMP custom "la7_iabtcf2"): il
     pulsante di primo livello che rifiuta il non necessario in un solo
@@ -274,6 +305,34 @@ SITES = {
         "profile_dirname": ".librewolf-nove-profile",
         "accept_cookies": accept_cookies_nove,
         "click_play": click_play_nove,
+        # Player Video.js: dopo un reload lo schermo intero va rimesso
+        # cliccando il pulsante fullscreen del player (vedi enter_player_fullscreen).
+        "videojs": True,
+    },
+    # Canali "sorelle" di Nove nel gruppo Warner Bros. Discovery (stessa
+    # azienda del canale 9): girano sulla stessa piattaforma web di nove.tv,
+    # con banner cookie OneTrust e player Video.js identici -> riusano
+    # accept_cookies_nove e click_play_nove. A differenza di Mediaset/Rai,
+    # qui ogni canale sta su un DOMINIO diverso: lo "slug" e' quindi l'URL
+    # completo (load_page lo usa cosi' com'e' quando inizia con http, vedi
+    # piu' sotto) e base_url="{slug}" fa semplicemente url == slug. Slug/URL
+    # ricavati dal link "live streaming" della home di ciascun sito (luglio
+    # 2026): se un canale smette di funzionare, apri il sito e ricopia il
+    # link della diretta qui sotto. ATTENZIONE: come Nove, vanno guardati con
+    # la VPN (wg0) SPENTA, altrimenti lo stream resta bloccato in caricamento.
+    "discovery": {
+        "base_url": "{slug}",
+        "channels": {
+            "dmax": "https://dmax.it/live-streaming-dmax",
+            "realtime": "https://realtime.it/live-streaming-real-time",
+            "giallo": "https://giallotv.it/live-streaming-giallo",
+            "motortrend": "https://discoveryturbo.it/live-streaming-motor-trend",
+            "foodnetwork": "https://foodnetwork.it/live-streaming-food-network",
+        },
+        "profile_dirname": ".librewolf-discovery-profile",
+        "accept_cookies": accept_cookies_nove,
+        "click_play": click_play_nove,
+        "videojs": True,
     },
 }
 
@@ -630,6 +689,19 @@ def main() -> None:
                     if elapsed >= args.silence_seconds:
                         print(f"[{time.strftime('%H:%M:%S')}] Silenzio da {elapsed:.0f}s ({level_db:.1f} dBFS) -> reload pagina")
                         was_fullscreen = is_fullscreen(driver, screen_resolution)
+                        # Distingue lo schermo intero DEL PLAYER (Fullscreen
+                        # API, es. pulsante espandi di Video.js) da quello della
+                        # sola finestra (F11/nativo): il primo, dopo il reload,
+                        # va ripristinato ri-cliccando il pulsante del player,
+                        # non basta driver.fullscreen_window().
+                        was_player_fullscreen = False
+                        if was_fullscreen:
+                            try:
+                                was_player_fullscreen = bool(
+                                    driver.execute_script("return !!document.fullscreenElement;")
+                                )
+                            except WebDriverException:
+                                pass
                         try:
                             driver.get(url)
                             accept_cookies = site_cfg.get("accept_cookies")
@@ -643,9 +715,12 @@ def main() -> None:
                                 ensure_unmuted(driver)
                                 boost_audio_volume("Google Chrome" if site_cfg.get("browser") == "chrome" else "LibreWolf")
                             if was_fullscreen:
-                                driver.fullscreen_window()
+                                if was_player_fullscreen and site_cfg.get("videojs") and enter_player_fullscreen(driver):
+                                    print("Schermo intero del player ripristinato.")
+                                else:
+                                    driver.fullscreen_window()
+                                    print("Schermo intero (finestra) ripristinato.")
                                 move_cursor_away(driver)
-                                print("Schermo intero ripristinato.")
                                 fullscreen_state = True
                                 next_fullscreen_check = time.monotonic() + 1.0
                         except WebDriverException as exc:
